@@ -13,7 +13,7 @@ which leads to inconsistent prefixing.
 
 from django.conf import settings
 from django.conf.urls import url
-from django.contrib.auth.views import password_reset_complete
+from django.contrib.auth.views import PasswordResetCompleteView
 
 from .views import auto_auth, login, logout, password_reset, register
 
@@ -66,7 +66,7 @@ urlpatterns = [
 urlpatterns += [
     url(
         r'^password_reset_complete/$',
-        password_reset_complete,
+        PasswordResetCompleteView.as_view(),
         name='password_reset_complete',
     ),
 ]

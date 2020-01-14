@@ -1,9 +1,11 @@
 """ Password reset logic and views . """
 
 import logging
+import re
+
 from django import forms
 
-from django.contrib.auth.forms import PasswordResetForm
+from django.contrib.auth.forms import PasswordResetForm, SetPasswordForm
 
 from django.conf import settings
 from django.contrib import messages
@@ -14,7 +16,7 @@ from django.contrib.auth.views import (
     INTERNAL_RESET_SESSION_TOKEN, PasswordResetConfirmView)
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.validators import ValidationError
-from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.utils.decorators import method_decorator
 from django.utils.encoding import force_bytes, force_text
@@ -23,6 +25,7 @@ from django.utils.translation import ugettext_lazy as _
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_POST
+from django.views.generic.edit import FormView
 
 from edx_ace import ace
 from edx_ace.recipient import Recipient
@@ -298,25 +301,44 @@ def _uidb36_to_uidb64(uidb36):
         uidb64 = '1'  # dummy invalid ID (incorrect padding for base64)
     return uidb64
 
+def extract_token_from_url(url):
+    token_search = re.search(r'/password_reset_confirm/.*/(.+?)/', url)
+    if token_search:
+        return token_search.group(1)
 
-class PasswordResetConfirmViewWrapper(PasswordResetConfirmView):
 
-    def _set_token_in_session(self, token):
+class PasswordResetConfirmViewWrapper(PasswordResetConfirmView, FormView):
+
+    def _set_token_in_session(self, request, token):
         if not token:
             return
-        session = self.session
+        session = request.session
         session[INTERNAL_RESET_SESSION_TOKEN] = token
         session.save()
 
-    def get(self, request, *args, **kwargs):
+    def dispatch(self, request, *args, **kwargs):
         token = kwargs.get('token')
-        self._set_token_in_session(token)
-        return super(PasswordResetConfirmView, self).get(request, *args, **kwargs)
+        if request.method == 'GET':
+            user = self.get_user(kwargs['uidb64'])
+            session_token = request.session.get(INTERNAL_RESET_SESSION_TOKEN)
+            if self.token_generator.check_token(user, session_token):
+                url  = reverse('password_reset_complete')
+                return HttpResponseRedirect(url)
+            else:
+                self._set_token_in_session(request, token)
+                kwargs['token'] = 'set-password'
 
-    def post(self, request, *args, **kwargs):
-        token = kwargs.get('token')
-        self._set_token_in_session(token)
-        return super(PasswordResetConfirmView, self).post(request, *args, **kwargs)
+        # import pdb; pdb.set_trace()
+        # user = self.get_user(kwargs['uidb64'])
+        # form = SetPasswordForm(user, request.POST)
+        # self.form_valid(form)
+        return super(PasswordResetConfirmView, self).dispatch(request, *args, **kwargs)
+
+    def get_user(self, uidb64):
+        return super(PasswordResetConfirmView, self).get_user(uidb64)
+
+    def form_valid(self, form):
+        return super(PasswordResetConfirmView, self).form_valid(form)
 
 
 # pylint: disable=too-many-statements
@@ -465,7 +487,9 @@ def password_reset_confirm_wrapper(request, uidb36=None, token=None):
             )
     else:
         response = PasswordResetConfirmViewWrapper.as_view()(request, uidb64=uidb64, token=token, extra_context=platform_name)
-        response_was_successful = response.context.get('validlink')
+        if response.status_code == 302 and response.url == '/password_reset_complete/':
+            return response
+        response_was_successful = response.context_data.get('validlink')
         if response_was_successful and not user.is_active:
             user.is_active = True
             user.save()
