@@ -332,13 +332,13 @@ class PasswordResetConfirmViewWrapper(PasswordResetConfirmView, FormView):
         # user = self.get_user(kwargs['uidb64'])
         # form = SetPasswordForm(user, request.POST)
         # self.form_valid(form)
-        return super(PasswordResetConfirmView, self).dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_user(self, uidb64):
-        return super(PasswordResetConfirmView, self).get_user(uidb64)
+        return super().get_user(uidb64)
 
     def form_valid(self, form):
-        return super(PasswordResetConfirmView, self).form_valid(form)
+        return super().form_valid(form)
 
 
 # pylint: disable=too-many-statements
@@ -426,7 +426,7 @@ def password_reset_confirm_wrapper(request, uidb36=None, token=None):
             )
 
         if 'is_account_recovery' in request.GET:
-            return PasswordResetConfirmViewWrapper.as_view()(request, uidb64=uidb64, token=token, extra_context=platform_name)
+            response =  PasswordResetConfirmViewWrapper.as_view()(request, uidb64=uidb64, token=token, extra_context=platform_name)
         else:
             response = PasswordResetConfirmViewWrapper.as_view()(request, uidb64=uidb64, token=token,
                                                                  extra_context=platform_name)
