@@ -13,7 +13,7 @@ from openedx.core.lib.api.view_utils import DeveloperErrorViewMixin, view_auth_c
 from . import USE_RATE_LIMIT_2_FOR_COURSE_LIST_API, USE_RATE_LIMIT_10_FOR_COURSE_LIST_API
 from .api import course_detail, list_courses
 from .forms import CourseDetailGetForm, CourseListGetForm
-from .serializers import CourseDetailSerializer, CourseSerializer
+from .serializers import CourseDetailSerializer, CourseWithTabsSerializer, CourseSerializer
 
 
 @view_auth_classes(is_authenticated=False)
@@ -122,6 +122,10 @@ class CourseDetailView(DeveloperErrorViewMixin, RetrieveAPIView):
             form.cleaned_data['username'],
             form.cleaned_data['course_key'],
         )
+
+
+class CourseDetailViewV2(CourseDetailView):
+    serializer_class = CourseWithTabsSerializer
 
 
 class CourseListUserThrottle(UserRateThrottle):

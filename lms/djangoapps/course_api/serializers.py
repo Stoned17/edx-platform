@@ -6,11 +6,16 @@ Course API Serializers.  Representing course catalog data
 import six.moves.urllib.error  # pylint: disable=import-error
 import six.moves.urllib.parse  # pylint: disable=import-error
 import six.moves.urllib.request  # pylint: disable=import-error
+from crum import get_current_request, get_current_user
 from django.urls import reverse
 from rest_framework import serializers
 
+from lms.djangoapps.courseware.tabs import get_course_tab_list
 from openedx.core.djangoapps.models.course_details import CourseDetails
+from openedx.core.djangoapps.util.user_messages import PageLevelMessages
 from openedx.core.lib.api.fields import AbsoluteURLField
+from student.models import CourseEnrollment
+from xmodule.modulestore.django import modulestore
 
 
 class _MediaSerializer(serializers.Serializer):  # pylint: disable=abstract-method
@@ -121,3 +126,35 @@ class CourseDetailSerializer(CourseSerializer):  # pylint: disable=abstract-meth
         # fields from CourseSerializer, which get their data
         # from the CourseOverview object in SQL.
         return CourseDetails.fetch_about_attribute(course_overview.id, 'overview')
+
+
+class CourseWithTabsSerializer(CourseSerializer):
+    enrollment = serializers.SerializerMethodField()
+    tabs = serializers.SerializerMethodField()
+    course_id = None
+    blocks_url = None
+
+    def get_tabs(self, course_overview):
+        """
+        Return course tab metadata.
+        """
+        # Ideally, we wouldn't have to load the course, but get_course_tabs won't work
+        # with a CourseOverview without more refactoring.
+        course = modulestore().get_course(course_overview.id)
+        tabs = []
+        for priority, tab in enumerate(get_course_tab_list(get_current_user(), course)):
+            tabs.append({
+                'title': tab.title,
+                'slug': tab.tab_id,
+                'priority': priority,
+                'type': tab.type,
+                'url': tab.link_func(course, reverse)    ,
+            })
+        return tabs
+
+    def get_enrollment(self, course_overview):
+        mode, is_active = CourseEnrollment.enrollment_mode_for_user(
+            get_current_user(),
+            course_overview.id
+        )
+        return {'mode': mode, 'is_active': is_active}
